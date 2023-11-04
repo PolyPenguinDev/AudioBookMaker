@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Audio Book Generation</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@300&display=swap">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <link rel="manifest" href="site.webmanifest">
+    <link rel="mask-icon" href="safari-pinned-tab.svg" color="#5bbad5">
+    <meta name="msapplication-TileColor" content="#da532c">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <style>
+        body {
+            font-family: 'Nunito', sans-serif;
+            text-align: center;
+            background-color: #ebffeb;
+        }
+        .red-background {
+            background-color: #ffebeb;
+        }
+        .uc {
+            background-color: #db7134;
+        }
+        h1 {
+            color: #333;
+        }
+        button {
+            border: none;
+            padding: 10px 20px;
+            margin: 10px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #3498db;
+            color: #fff;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        button:disabled:hover {
+            background-color: #ccc;
+        }
+        button.use-uncensored {
+            background-color: #db3434;
+        }
+        button.use-censored {
+            background-color: #47db34;
+        }
+        #input {
+            background-color: #fff;
+            padding: 10px;
+            margin: 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: 500px;
+        }
+        #output {
+            font-size: 20px;
+            background-color: #fff;
+            padding: 10px;
+            margin: 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h3 id="modelname" style="text-align: right;">using Llama 2 70b<h3>
+    <h1 style="margin-bottom: 60px; margin-top: 0px; font-size: 50px;">Audio Book Generation</h1>
+    <input id="input" placeholder="Prompt" tag="textbox">
+    <br>
+    <button id="startButton" style="margin-top: 20px;"x>Start</button>
+    <button id="resetButton" disabled>Reset</button>
+    <br>
+    <button id="toggleCensorshipButton" class="use-uncensored", style="margin-bottom: 20px; width: 200px">Use Uncensored Model</button>
+    <br> 
+    <div id="output">
+        📝 Enter your prompt and make an audio book!
+    </div>
+    <script>
+        var isAudioPlaying = true;
+        var chapterNumber = 1;
+        const conversationHistory = [];
+        var responseMessage;
+        const inputElement = document.getElementById("input");
+        const outputElement = document.getElementById("output");
+        const sendMessageButton = document.getElementById("startButton");
+        const clearOutputButton = document.getElementById("resetButton");
+        const toggleCensorshipButton = document.getElementById("toggleCensorshipButton");
+        const modelabel = document.getElementById("modelname");
+        let useCensoredModel = false;
+
+        function checkAudioFlag() {
+            if (responsiveVoice.isPlaying()) {
+                window.setTimeout(checkAudioFlag, 100);
+            } else {
+                responsiveVoice.speak(responseMessage, 'UK English Male');
+                outputElement.innerHTML += "<br>" + responseMessage.replace("\n", "<br>") + "<br>";
+                chapterNumber++;
+                console.log("reading");
+                isAudioPlaying = true;
+            }
+        }
+
+        toggleCensorshipButton.addEventListener("click", function() {
+            useCensoredModel = !useCensoredModel;
+            modelabel.textContent = useCensoredModel ? "using Airoboros 70b" : "using Llama 2 70b";
+            toggleCensorshipButton.textContent = useCensoredModel ? "Use Censored Model" : "Use Uncensored Model";
+            toggleCensorshipButton.className = useCensoredModel ? "use-censored" : "use-uncensored";
+            if (useCensoredModel) {
+                document.body.classList.add("red-background");
+                sendMessageButton.classList.add("uc");
+                clearOutputButton.classList.add("uc");
+            } else {
+                document.body.classList.remove("red-background");
+                sendMessageButton.classList.remove("uc");
+                clearOutputButton.classList.remove("uc");
+            }
+        });
+
+        var apiUrl = "https://api.deepinfra.com/v1/openai/chat/completions";
+        var authToken = "";
+
+        sendMessageButton.addEventListener("click", function() {
+            var uncensoredModel = "deepinfra/airoboros-70b";
+            var censoredModel = "meta-llama/Llama-2-70b-chat-hf";
+            const messageContent = inputElement.value;
+            conversationHistory.push({ "role": "system", "content": "You are an expert book writer, here is the book you are writing: \"" + messageContent + "\" this will most likly be referring to a novel unless said otherwise. write out the contents of the entire chapter, not a summary. do NOT use markdown." });
+            sendMessageButton.disabled = true;
+            clearOutputButton.disabled = false;
+            inputElement.value = "";
+            outputElement.innerHTML = "🔃 Loading...";
+
+            const fetchResponses = async () => {
+                conversationHistory.push({ "role": "user", "content": "write chapter " + chapterNumber });
+                    console.log(conversationHistory);
+                    const response = await fetch(apiUrl, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": `Bearer ${authToken}`
+                        },
+                        body: JSON.stringify({
+                            model: useCensoredModel ? uncensoredModel : "meta-llama/Llama-2-70b-chat-hf",
+                            messages: conversationHistory
+                        })
+                    });
+                    console.log("Testing");
+                    const data = await response.json();
+                    console.log(data);
+                    if (data.choices && data.choices.length > 0) {
+                        conversationHistory.push(data.choices[0].message);
+                        responseMessage = data.choices[0].message.content;
+                        if (outputElement.innerHTML == "🔃 Loading...") {
+                            outputElement.innerHTML = "";
+                        }
+                        console.log(responsiveVoice.isPlaying());
+                        checkAudioFlag();
+                    } else {
+                        console.error("Response from the API is empty or missing 'choices'.");
+                    }
+            }
+
+            function generateChapter() {
+                if (!isAudioPlaying) {
+                    window.setTimeout(generateChapter, 100);
+                } else {
+                    isAudioPlaying = false;
+                    fetchResponses();
+                    generateChapter();
+                }
+            }
+            generateChapter();
+        });
+
+        clearOutputButton.addEventListener("click", function() {
+            location.reload();
+        });
+    </script>
+    <script src="https://code.responsivevoice.org/responsivevoice.js?key=6AqfGK6s"></script>
+</body>
+</html>
